@@ -1,0 +1,57 @@
+name: Build macOS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build macOS
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: 检测 runner 架构
+        id: arch
+        run: echo "arch=$(uname -m)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Get app dependencies
+        run: flutter pub get
+
+      - name: Get rhttp dependencies
+        working-directory: plugins/rhttp/rhttp
+        run: flutter pub get
+
+      - name: Generate rhttp freezed files
+        working-directory: plugins/rhttp/rhttp
+        run: dart run build_runner build
+
+      - name: Generate app files
+        run: dart run build_runner build
+
+      - name: Build macOS
+        run: flutter build macos --release --no-pub
+
+      - name: 打包 .app
+        run: |
+          cd build/macos/Build/Products/Release
+          APP=$(ls -d *.app | head -1)
+          mkdir -p dist
+          zip -ry "dist/pixez-macos-${{ steps.arch.outputs.arch }}.zip" "$APP"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pixez-macos-${{ steps.arch.outputs.arch }}
+          path: dist/pixez-macos-${{ steps.arch.outputs.arch }}.zip
+          compression-level: 0
